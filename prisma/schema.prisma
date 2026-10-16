@@ -1,0 +1,183 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // Conserva el puerto 6543 para tu app en la nube
+  directUrl = env("DIRECT_URL")     // Usará el puerto 5432 para la terminal
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  TRANSLATION
+  MATCHING
+}
+
+enum SessionStatus {
+  WAITING
+  IN_PROGRESS
+  FINISHED
+}
+
+// 1. Usuarios y Roles
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  passwordHash  String
+  role          Role      @default(STUDENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relaciones
+  createdGames     Game[]             @relation("TeacherGames")
+  createdClasses   Classroom[]        @relation("TeacherClasses")
+  enrollments      ClassEnrollment[]
+  participations   Participant[]
+  submissions      AnswerSubmission[]
+  topicProgresses  TopicProgress[]
+}
+
+// 2. Aulas / Clases Virtuales
+model Classroom {
+  id          String   @id @default(cuid())
+  name        String   // Ej: "Quechua Básico - Grupo A"
+  code        String   @unique // Código de acceso a la clase (ej: "QUECHUA-2026")
+  teacherId   String
+  createdAt   DateTime @default(now())
+
+  teacher     User              @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Cascade)
+  enrollments ClassEnrollment[]
+  sessions    GameSession[]
+}
+
+model ClassEnrollment {
+  id          String   @id @default(cuid())
+  classId     String
+  studentId   String
+  joinedAt    DateTime @default(now())
+
+  classroom   Classroom @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student     User      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentId])
+}
+
+// 3. Juegos y Preguntas de Quechua
+model Game {
+  id          String   @id @default(cuid())
+  title       String   // Ej: "Vocabulario del Ayllu (Familia)"
+  description String?
+  topic       String   // Ej: "Saludos", "Números (Yupaykuna)", "Familia"
+  creatorId   String
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator     User          @relation("TeacherGames", fields: [creatorId], references: [id], onDelete: Cascade)
+  questions   Question[]
+  sessions    GameSession[]
+}
+
+model Question {
+  id            String       @id @default(cuid())
+  gameId        String
+  prompt        String       // Ej: "¿Qué significa esta tarjeta o cómo se dice en Quechua?"
+  imageUrl      String?      // Ruta o URL de la imagen (ej: "/images/rimaykullayki.png")
+  audioUrl      String?      // Ruta o URL del audio en Quechua (ej: "/audio/sulpayki.mp3")
+  timeLimitSec  Int          @default(20)
+  points        Int          @default(100)
+  type          QuestionType @default(MULTIPLE_CHOICE)
+  order         Int          @default(1)
+
+  game          Game               @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  options       Option[]
+  submissions   AnswerSubmission[]
+}
+
+model Option {
+  id          String   @id @default(cuid())
+  questionId  String
+  text        String   // Ej: "Taya", "Yaya / Taita", "Mama", "Pani"
+  isCorrect   Boolean  @default(false)
+
+  question    Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  submissions AnswerSubmission[]
+}
+
+// 4. Sesión de Juego en Vivo (Tipo Kahoot)
+model GameSession {
+  id                   String        @id @default(cuid())
+  pin                  String        @unique // PIN de 6 dígitos para unirse a la sala
+  gameId               String
+  classId              String?
+  status               SessionStatus @default(WAITING)
+  currentQuestionIndex Int           @default(0)
+  createdAt            DateTime      @default(now())
+  endedAt              DateTime?
+
+  game         Game               @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  classroom    Classroom?         @relation(fields: [classId], references: [id])
+  participants Participant[]
+  submissions  AnswerSubmission[]
+}
+
+// 5. Participantes y Avance en Vivo
+model Participant {
+  id                String   @id @default(cuid())
+  sessionId         String
+  userId            String
+  totalScore        Int      @default(0)
+  questionsAnswered Int      @default(0)
+  joinedAt          DateTime @default(now())
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+}
+
+// 6. Respuestas Individuales por Pregunta
+model AnswerSubmission {
+  id           String   @id @default(cuid())
+  sessionId    String
+  userId       String
+  questionId   String
+  optionId     String?
+  isCorrect    Boolean
+  scoreEarned  Int      @default(0)
+  timeTakenSec Float
+  submittedAt  DateTime @default(now())
+
+  session        GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question       Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption Option?     @relation(fields: [optionId], references: [id])
+
+  @@unique([sessionId, userId, questionId])
+}
+
+// 7. Avance Histórico Acumulado por Tema
+model TopicProgress {
+  id               String   @id @default(cuid())
+  userId           String
+  topic            String   // Ej: "Yupaykuna", "Ayllu"
+  level            Int      @default(1)
+  accumulatedScore Int      @default(0)
+  completedGames   Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, topic])
+}
