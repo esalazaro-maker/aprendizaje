@@ -1,7 +1,7 @@
 // src/app/game/[id]/page.tsx
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { use, useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -28,7 +28,7 @@ interface GameData {
   questions: Question[];
 }
 
-export default function PlayGamePage({ params }: { params: Promise<{ id: string }> }) {
+function GameContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -108,7 +108,7 @@ export default function PlayGamePage({ params }: { params: Promise<{ id: string 
 
   if (status === "loading" || loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center font-bold text-xl">
+      <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center font-bold text-xl">
         Cargando lección interactiva...
       </div>
     );
@@ -116,7 +116,7 @@ export default function PlayGamePage({ params }: { params: Promise<{ id: string 
 
   if (!session) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
         <h2 className="text-2xl font-bold mb-4">Debes iniciar sesión para registrar tu avance</h2>
         <button
           onClick={() => router.push("/")}
@@ -130,7 +130,7 @@ export default function PlayGamePage({ params }: { params: Promise<{ id: string 
 
   if (!game || !game.questions.length) {
     return (
-      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
         <h2 className="text-2xl font-bold mb-4">No se encontraron preguntas para este juego</h2>
         <button onClick={() => router.push("/")} className="bg-yellow-400 text-indigo-950 font-bold px-6 py-3 rounded-xl">
           Volver
@@ -257,7 +257,7 @@ export default function PlayGamePage({ params }: { params: Promise<{ id: string 
         </div>
       </section>
 
-      {/* Navegación al siguiente desafío */}
+      {/* Navegación */}
       <footer className="max-w-4xl mx-auto w-full flex justify-end">
         {isAnswered && (
           <button
@@ -269,5 +269,13 @@ export default function PlayGamePage({ params }: { params: Promise<{ id: string 
         )}
       </footer>
     </main>
+  );
+}
+
+export default function PlayGamePage(props: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 text-white flex items-center justify-center font-bold">Cargando sala...</div>}>
+      <GameContent params={props.params} />
+    </Suspense>
   );
 }

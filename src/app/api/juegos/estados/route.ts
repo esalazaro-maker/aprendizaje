@@ -1,8 +1,11 @@
 // src/app/api/juegos/estados/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { connection } from "next/server";
 
 export async function GET() {
+  await connection();
+
   try {
     const games = await prisma.game.findMany({
       select: {
@@ -11,7 +14,6 @@ export async function GET() {
       },
     });
 
-    // Mapea los IDs (ej: "juego1", "juego2") con su estado booleano (true/false)
     const estados = games.reduce((acc, game) => {
       acc[game.id] = game.isPublic;
       return acc;

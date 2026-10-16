@@ -3,12 +3,14 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { connection } from "next/server";
 
 export async function GET() {
+  await connection(); // Indicar a Next.js que la ruta requiere datos dinámicos en vivo
+
   try {
     const session = await getServerSession(authOptions);
 
-    // 🔒 Control de acceso: Verificar que el usuario esté autenticado y sea TEACHER
     if (!session || session.user.role !== "TEACHER") {
       return NextResponse.json(
         { error: "Acceso denegado. Se requieren permisos de profesor." },
@@ -16,7 +18,6 @@ export async function GET() {
       );
     }
 
-    // Obtener la lista de estudiantes con su avance acumulado por tema
     const estudiantes = await prisma.user.findMany({
       where: { role: "STUDENT" },
       select: {
